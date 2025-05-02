@@ -79,7 +79,6 @@ func TestExecuteWithTools(t *testing.T) {
 			expected: []api.ToolCall{},
 			wantErr:  true,
 		},
-		//
 		{
 			name:  "mistral without tool token",
 			model: "mistral",
@@ -212,16 +211,13 @@ func TestExecuteWithTools(t *testing.T) {
 				got := []api.ToolCall{}
 				tokens := strings.Fields(tt.output)
 				sb := strings.Builder{}
-				errCheck := 1
+				success := false
 				for _, tok := range tokens {
 					sb.WriteString(" " + tok)
 					toolCalls, partial, err := ParseToolCalls(sb.String(), tt.token, tmpl)
 					if err == nil {
-						errCheck = 0
+						success = true
 					}
-					// if err != nil && !tt.wantErr {
-					// 	t.Fatal(err)
-					// }
 					if partial {
 						continue
 					}
@@ -234,8 +230,8 @@ func TestExecuteWithTools(t *testing.T) {
 						t.Errorf("mismatch (-got +want):\n%s", diff)
 					}
 				}
-				if errCheck == 1 && !tt.wantErr {
-					t.Errorf("expected error, got nil")
+				if !success && !tt.wantErr {
+					t.Errorf("expected success but got errors")
 				}
 			})
 		})

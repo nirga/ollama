@@ -1547,7 +1547,10 @@ func (s *Server) ChatHandler(c *gin.Context) {
 			}
 		}
 
-		var checkToolCall bool = true
+		checkToolCall := false
+		if len(req.Tools) > 0 {
+			checkToolCall = true
+		}
 		if err := r.Completion(c.Request.Context(), llm.CompletionRequest{
 			Prompt:  prompt,
 			Images:  images,
@@ -1576,17 +1579,6 @@ func (s *Server) ChatHandler(c *gin.Context) {
 				res.LoadDuration = checkpointLoaded.Sub(checkpointStart)
 			}
 
-			// TODO(parthsareen): tool call checking and filtering should be moved outside of this callback once streaming
-			// however this was a simple change for now without reworking streaming logic of this (and other)
-			// handlers
-			if req.Stream != nil && !*req.Stream || len(req.Tools) == 0 {
-				ch <- res
-				return
-			}
-
-			// Streaming tool calls:
-			// If tools are recognized, use a flag to track the sending of a tool downstream
-			// This ensures that content is cleared from the message on the last chunk sent
 			sb.WriteString(r.Content)
 			if len(req.Tools) > 0 && checkToolCall {
 				toolCalls, partial, err := ParseToolCalls(sb.String(), templateToolToken, tmpl)
@@ -1631,52 +1623,13 @@ func (s *Server) ChatHandler(c *gin.Context) {
 		var resp api.ChatResponse
 		var sb strings.Builder
 		var toolCalls []api.ToolCall
-		checkToolCall := true
-		var tb strings.Builder
-		var templateToolToken string
-		var tmpl *gotmpl.Template
-
-		if len(req.Tools) > 0 {
-			var ok bool
-			tmpl, ok = ToolTemplate(m)
-			if !ok {
-				slog.Debug("no tool template found")
-			}
-			tokenText, ok := TextAfterToolCalls(tmpl)
-			if !ok {
-				slog.Debug("no tool text found from template")
-			}
-
-			templateToolToken, ok = ToolToken(tokenText)
-			if !ok {
-				slog.Debug("no tool token found")
-			}
-		}
 		for rr := range ch {
 			switch t := rr.(type) {
 			case api.ChatResponse:
 				sb.WriteString(t.Message.Content)
 				resp = t
-				// TODO: work max tool tok logic
-				if len(req.Tools) > 0 && checkToolCall {
-					tb.WriteString(t.Message.Content)
-					if tcs, partial, err := ParseToolCalls(tb.String(), templateToolToken, tmpl); err == nil {
-						if partial {
-							// circuit break to remove tool end token
-							if len(tcs) > 0 {
-								tb.Reset()
-							}
-							return
-						}
-						toolCalls = append(toolCalls, tcs...)
-						resp.Message.Content = ""
-						tb.Reset()
-					} else {
-						// equivalent to no partial - send the content downstream and flush buffers
-						tb.Reset()
-						sb.Reset()
-						checkToolCall = false
-					}
+				if len(req.Tools) > 0 {
+					toolCalls = append(toolCalls, t.Message.ToolCalls...)
 				}
 			case gin.H:
 				msg, ok := t["error"].(string)

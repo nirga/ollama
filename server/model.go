@@ -237,12 +237,13 @@ func ToolToken(found string) (string, bool) {
 		}
 	}
 	if start != -1 && end != -1 {
+		// return the token including the [ or < and the ] or >
 		return found[start : end+1], true
 	} else if start != -1 {
-		// get until the [ or <
+		// get until the [ or < - in the case tag was not closed
 		return found[:start], true
 	} else if end != -1 {
-		// get after the ] or >
+		// get after the ] or > - in the case tag was not opened
 		return found[end+1:], true
 	}
 	return first, true

@@ -42,6 +42,7 @@ func parseObjects(s string) []map[string]any {
 }
 
 // parseJSONToolCalls attempts to parse a JSON string into a slice of ToolCalls.
+// Returns parsed tool calls and a boolean indicating if the JSON is incomplete
 func parseJSONToolCalls(tmpl *gotmpl.Template, s string) ([]api.ToolCall, bool) {
 	var b bytes.Buffer
 	if err := tmpl.Execute(&b, map[string][]api.ToolCall{
@@ -124,7 +125,7 @@ func parseJSONToolCalls(tmpl *gotmpl.Template, s string) ([]api.ToolCall, bool) 
 	return toolCalls, len(toolCalls) > 0
 }
 
-// routeToolParsing is a helper function that routes the parsing of tool calls
+// routeToolParsing is a helper function that routes what kind of tool parsing to use
 func routeToolParsing(s string, tmpl *gotmpl.Template) ([]api.ToolCall, bool, bool) {
 	if strings.HasPrefix(s, "[{") || strings.HasPrefix(s, "```") || strings.HasPrefix(s, "{") {
 		if toolCalls, ok := parseJSONToolCalls(tmpl, s); ok {
@@ -137,6 +138,8 @@ func routeToolParsing(s string, tmpl *gotmpl.Template) ([]api.ToolCall, bool, bo
 	return nil, false, false
 }
 
+// ParseToolCalls extracts tool calls from a string using a tool token prefix or direct JSON parsing.
+// Returns tool calls, whether parsing is incomplete, and any errors.
 func ParseToolCalls(s string, toolToken string, tmpl *gotmpl.Template) ([]api.ToolCall, bool, error) {
 	if tmpl == nil {
 		return nil, false, fmt.Errorf("no template provided")
